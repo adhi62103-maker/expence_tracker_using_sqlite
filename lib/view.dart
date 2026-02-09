@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'models/transaction_model.dart';
 import 'models/database_helper.dart';
+import 'pages/all_transactions_page.dart';
 
 class ExpenesTracker extends StatefulWidget {
   const ExpenesTracker({super.key});
@@ -42,10 +43,11 @@ class _ExpenesTrackerState extends State<ExpenesTracker> {
     }
   }
 
-  void _showAddTransactionModal() {
+  void _showAddTransactionModal({String transactionType = 'expense'}) {
     showDialog(
       context: context,
       builder: (context) => AddTransactionModal(
+        initialType: transactionType,
         onSave: (transaction) async {
           await dbHelper.insertTransaction(transaction);
           _loadTransactions();
@@ -218,7 +220,7 @@ class _ExpenesTrackerState extends State<ExpenesTracker> {
                         backgroundColor: Colors.blue,
                       ),
                       onPressed: () {
-                        _showAddTransactionModal();
+                        _showAddTransactionModal(transactionType: 'income');
                       },
                       child: const Center(
                         child: Icon(Icons.add, color: Colors.white, size: 28),
@@ -237,7 +239,7 @@ class _ExpenesTrackerState extends State<ExpenesTracker> {
                         backgroundColor: Colors.purple,
                       ),
                       onPressed: () {
-                        _showAddTransactionModal();
+                        _showAddTransactionModal(transactionType: 'expense');
                       },
                       child: const Center(
                         child: Icon(
@@ -264,7 +266,14 @@ class _ExpenesTrackerState extends State<ExpenesTracker> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AllTransactionsPage(),
+                          ),
+                        );
+                      },
                       child: const Text(
                         "View all",
                         style: TextStyle(
@@ -279,7 +288,7 @@ class _ExpenesTrackerState extends State<ExpenesTracker> {
               SizedBox(
                 height: 400,
                 child: ListView.builder(
-                  itemCount: transactions.length,
+                  itemCount: transactions.length > 3 ? 3 : transactions.length,
                   itemBuilder: (context, index) {
                     final transaction = transactions[index];
                     return Padding(
@@ -287,64 +296,133 @@ class _ExpenesTrackerState extends State<ExpenesTracker> {
                         horizontal: 15,
                         vertical: 10,
                       ),
-                      child: Card(
-                        color: Colors.blueGrey.withOpacity(0.3),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          side: BorderSide(
-                            color: transaction.type == 'income'
-                                ? Colors.green
-                                : Colors.red,
-                            width: 2,
+                      child: Dismissible(
+                        key: Key(
+                          '${transaction.id}-${DateTime.now().millisecond}',
+                        ),
+                        direction: DismissDirection.endToStart,
+                        confirmDismiss: (direction) async {
+                          return await showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              backgroundColor: Color.fromARGB(255, 40, 40, 40),
+                              title: const Text(
+                                'Delete Transaction',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                              content: const Text(
+                                'Are you sure you want to delete this transaction?',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text(
+                                    'Cancel',
+                                    style: TextStyle(color: Colors.blue),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text(
+                                    'Delete',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        onDismissed: (direction) async {
+                          await dbHelper.deleteTransaction(transaction.id!);
+                          _loadTransactions();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Transaction deleted'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                        background: Container(
+                          margin: EdgeInsets.zero,
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          child: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.white,
+                            size: 28,
                           ),
                         ),
-                        child: ListTile(
-                          leading: Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: _getCategoryColor(transaction.category),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(
-                              _getCategoryIcon(transaction.category),
-                              color: Colors.white,
-                            ),
-                          ),
-                          title: Text(
-                            transaction.category,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                        child: Card(
+                          color: Colors.blueGrey.withOpacity(0.3),
+                          elevation: 2,
+                          margin: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(
+                              color: transaction.type == 'income'
+                                  ? Colors.green
+                                  : Colors.red,
+                              width: 2,
                             ),
                           ),
-                          subtitle: Text(
-                            transaction.notes,
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                "${transaction.type == 'income' ? '+' : '-'}\$${transaction.amount.toStringAsFixed(2)}",
-                                style: TextStyle(
-                                  color: transaction.type == 'income'
-                                      ? Colors.green
-                                      : Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                            ),
+                            leading: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: _getCategoryColor(transaction.category),
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                              Text(
-                                DateFormat('MMM dd').format(transaction.date),
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 12,
-                                ),
+                              child: Icon(
+                                _getCategoryIcon(transaction.category),
+                                color: Colors.white,
                               ),
-                            ],
+                            ),
+                            title: Text(
+                              transaction.category,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Text(
+                              transaction.notes,
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  "${transaction.type == 'income' ? '+' : '-'}\$${transaction.amount.toStringAsFixed(2)}",
+                                  style: TextStyle(
+                                    color: transaction.type == 'income'
+                                        ? Colors.green
+                                        : Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  DateFormat('MMM dd').format(transaction.date),
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -390,19 +468,30 @@ class _ExpenesTrackerState extends State<ExpenesTracker> {
 
 class AddTransactionModal extends StatefulWidget {
   final Function(ExpenseTransaction) onSave;
+  final String initialType;
 
-  const AddTransactionModal({super.key, required this.onSave});
+  const AddTransactionModal({
+    super.key,
+    required this.onSave,
+    this.initialType = 'expense',
+  });
 
   @override
   State<AddTransactionModal> createState() => _AddTransactionModalState();
 }
 
 class _AddTransactionModalState extends State<AddTransactionModal> {
-  String transactionType = 'expense';
+  late String transactionType;
   double amount = 0;
   String selectedCategory = 'Food';
   String notes = '';
   DateTime selectedDate = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    transactionType = widget.initialType;
+  }
 
   final List<String> categories = [
     'Food',
